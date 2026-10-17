@@ -14,6 +14,7 @@ canvas{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;disp
 h1,h2{margin:0 0 8px}p{margin:8px 0}.sm{font-size:13px;opacity:.75}
 button{font:inherit;font-weight:700;padding:12px 28px;border:0;border-radius:12px;background:var(--acc);color:#fff;cursor:pointer}
 button:disabled{opacity:.5}.row{display:flex;gap:16px}.row button{min-width:130px}
+#mu{position:fixed;right:62px;top:calc(12px + env(safe-area-inset-top,0px));z-index:5;padding:8px 12px;font-size:18px;line-height:1;background:var(--panel);color:var(--ink)}
 #fs{position:fixed;right:12px;top:calc(12px + env(safe-area-inset-top,0px));z-index:5;padding:8px 12px;font-size:18px;line-height:1;background:var(--panel);color:var(--ink)}
 #hud{position:fixed;left:12px;top:calc(12px + env(safe-area-inset-top,0px));background:var(--panel);padding:10px 14px;border-radius:12px;font-size:14px}
 #hud ul{list-style:none;margin:6px 0;padding:0}#hud li.d{text-decoration:line-through;opacity:.55}
@@ -28,7 +29,7 @@ textarea{width:100%;height:70px;font-size:11px;box-sizing:border-box;margin-top:
 <div id="title" class="scr"><div class="box"><h1>🎓 Campus Quest</h1><p>Complete the school quest to finish the study.</p><button id="go" disabled>Loading…</button></div></div>
 <div id="sel" class="scr hide" style="justify-content:space-between"><div class="box"><h2>Choose your character</h2></div><div class="row"><button data-c="f">Female</button><button data-c="m">Male</button></div></div>
 <div id="brief" class="scr hide"><div class="box"><h2>Your quest</h2><p>Your school things are scattered around campus. Collect your <b>Notebook</b> (Classroom), <b>Library Card</b> (Library) and <b>Lunch Pass</b> (Canteen), then bring them to the <b>Principal's Office</b>.</p><p class="sm">Move: WASD / arrows or joystick · drag to look around</p><button id="begin">Begin quest</button></div></div>
-<button id="fs" title="Fullscreen (F)">⛶</button>
+<button id="mu" title="Music on/off (M)">🔊</button><button id="fs" title="Fullscreen (F)">⛶</button>
 <div id="hud" class="hide"><b>Quest</b><ul id="ql"></ul><div id="tm">0:00</div></div>
 <div id="toast" class="hide"></div>
 <div id="end" class="scr hide"><div class="box"><h2>🎉 Quest complete!</h2><p>Your participant code</p><div class="code" id="code"></div><p id="sum" class="sm"></p><button id="dl">Download data</button><textarea id="ta" readonly></textarea><p class="sm">Give this code to the researcher.</p></div></div>
@@ -83,14 +84,25 @@ function toast(t){const e=$('toast');e.textContent=t;e.classList.remove('hide');
 function ql(){$('ql').innerHTML=IT.map(i=>`<li class="${i.got?'d':''}">${i.got?'✔':'○'} ${i.n}</li>`).join('')+`<li class="${IT.every(i=>i.got)?'':'x'}">➜ Principal's Office</li>`}
 const fmt=ms=>{const s=Math.floor(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
 setTimeout(()=>{try{C.f=mk('fm','fi',0xf4a6c6,-1.1,'tf');C.m=mk('mm','mi',0x8fb8f0,1.1,'tm2');mode='title';$('go').disabled=false;$('go').textContent='Start'}catch(e){$('go').textContent='Load error';console.error(e)}},50);
-$('go').onclick=()=>{mode='sel';show('sel');log('start_pressed')};
+$('go').onclick=()=>{music();mode='sel';show('sel');log('start_pressed')};
 document.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{const k=b.dataset.c,o=k==='f'?'m':'f';ch=C[k];C[o].g.visible=false;ch.g.position.set(0,0,0);log('character',{character:k==='f'?'female':'male'});L.char=k==='f'?'female':'male';mode='brief';show('brief')});
 $('begin').onclick=()=>{mode='play';L.start=now();log('quest_begin');ql();show('play');$('stick').classList.add('on')};
-function finish(){L.end=now();log('quest_complete');fin()}
+function finish(){L.end=now();log('quest_complete');sfx('complete');bgm.volume=.15;fin()}
 function fin(){mode='done';const code=Array.from({length:6},()=>'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.random()*31|0]).join(''),dur=L.end-L.start;
  const res={participant:code,character:L.char,durationMs:dur,itemOrder:L.events.filter(e=>e.type==='item').map(e=>({id:e.id,t:e.t-L.start})),earlyDeliveryAttempts:L.early,distance:+L.dist.toFixed(1),moveTimeMs:Math.round(L.moveT*1000),events:L.events,samples:L.samples};
  const txt=JSON.stringify(res);$('code').textContent=code;$('ta').value=txt;$('sum').textContent=`Time ${fmt(dur)} · ${L.char} character`;show('end');$('stick').classList.remove('on');
  $('dl').onclick=()=>{try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));a.download='quest-'+code+'.json';a.click()}catch(e){$('ta').select()}}}
+// ---- audio (files in public/audio/) ----
+const AU='public/audio/',bgm=new Audio(AU+'background_music.mp3');bgm.loop=true;bgm.volume=.3;
+const sfxA={};['click','pickup','error','complete'].forEach(k=>{sfxA[k]=new Audio(AU+k+'.wav');sfxA[k].volume=.6});
+let muted=false,bgmOn=false;
+const sfx=k=>{if(muted)return;try{const a=sfxA[k];a.currentTime=0;const p=a.play();p&&p.catch(()=>{})}catch(e){}};
+function music(){bgmOn=true;if(muted)return;const p=bgm.play();p&&p.catch(()=>{})}
+function setMute(m){muted=m;bgm.muted=m;$('mu').textContent=m?'🔇':'🔊';if(!m&&bgmOn)music()}
+$('mu').onclick=()=>setMute(!muted);
+addEventListener('keydown',e=>{if(e.code==='KeyM')setMute(!muted)});
+document.addEventListener('click',e=>{const b=e.target.closest('button');if(b&&b.id!=='mu'&&b.id!=='fs')sfx('click')});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)bgm.pause();else if(bgmOn&&!muted)music()});
 // ---- controls ----
 const de=document.documentElement,rq=de.requestFullscreen||de.webkitRequestFullscreen;
 function fs(){try{if(document.fullscreenElement||document.webkitFullscreenElement)(document.exitFullscreen||document.webkitExitFullscreen).call(document);else{const r=rq.call(de);r&&r.catch&&r.catch(()=>toast('Fullscreen not available here'))}}catch(e){toast('Fullscreen not available here')}}
@@ -129,8 +141,8 @@ function tick(t){requestAnimationFrame(tick);const dt=Math.min(.05,(t-last)/1000
   if(mode==='play'){
    $('tm').textContent=fmt(now()-L.start);
    if(now()-L.start>=L.ns*1000){L.ns++;L.samples.push([now()-L.start,+P.x.toFixed(2),+P.z.toFixed(2)])}
-   IT.forEach(i=>{if(!i.got&&Math.hypot(P.x-i.x,P.z-i.z)<1.4){i.got=true;i.m.visible=false;log('item',{id:i.id});ql();toast('Collected: '+i.n)}});
-   if(Math.hypot(P.x-DZ.x,P.z-DZ.z)<1.8){if(IT.every(i=>i.got))finish();else if(!finish.w||now()-finish.w>2500){finish.w=now();L.early++;log('early_dropoff');toast('Collect all 3 items first')}}}
+   IT.forEach(i=>{if(!i.got&&Math.hypot(P.x-i.x,P.z-i.z)<1.4){i.got=true;i.m.visible=false;log('item',{id:i.id});sfx('pickup');ql();toast('Collected: '+i.n)}});
+   if(Math.hypot(P.x-DZ.x,P.z-DZ.z)<1.8){if(IT.every(i=>i.got))finish();else if(!finish.w||now()-finish.w>2500){finish.w=now();L.early++;sfx('error');log('early_dropoff');toast('Collect all 3 items first')}}}
   const tx=P.x,ty=1.3,tz=P.z;cam.position.lerp(new T.Vector3(tx+Math.sin(cy)*Math.cos(cp)*cd,Math.max(.5,ty+Math.sin(cp)*cd),tz+Math.cos(cy)*Math.cos(cp)*cd),Math.min(1,dt*8));cam.lookAt(tx,ty,tz)}
  sun.position.set(P.x+10,20,P.z+8);sun.target.position.set(P.x,0,P.z);sun.target.updateMatrixWorld();
  R.render(S,cam)}
